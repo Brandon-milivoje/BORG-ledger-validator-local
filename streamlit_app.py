@@ -10,7 +10,7 @@ st.set_page_config(page_title="BORG Jobs Verification", layout="wide")
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&family=Inter:wght@400;600&display=swap');
-    
+
     html, body, [class*="st-"] { font-family: 'Inter', sans-serif; }
     code { font-family: 'Roboto Mono', monospace !important; color: #d4d4d4 !important; }
 
@@ -82,7 +82,7 @@ st.markdown("""
 # --- HEADER SECTION ---
 st.title("Bloomberg BORG Jobs Verification")
 st.markdown("""
-This tool automates the validation of JSON ledger logs from BORG jobs. It parses raw log strings to ensure environment flags, 
+This tool automates the validation of JSON ledger logs from BORG jobs. It parses raw log strings to ensure environment flags,
 ticker values, and routing parameters match expected benchmarks, reducing manual errors during economic data releases.
 """)
 
@@ -99,7 +99,7 @@ with st.expander("🎯 Target Values (Scenario-Specific Inputs)"):
     t_ticker = c1.text_input("Target Ticker Value", key="input_t1")
     t_scaling = c2.text_input("Target Scaling Factor", key="input_t2")
     t_period = c3.text_input("Target Observation Period", key="input_t3")
-    
+
     st.divider()
     c4, c5, c6 = st.columns([1.2, 1.2, 1.2])  # Adjusted column widths for better spacing
     e_agent = c4.text_input("Expected Agent ID", key="input_t4")
@@ -156,7 +156,7 @@ if raw_input and parse_btn:
                 meta = obj.get('objectMetadata', {})
                 content = obj.get('objectContent', [{}])[0].get('contentMetadata', {})
                 is_borg = meta.get('isBorgTest')
-                
+
                 # --- ENVIRONMENT HEADER ---
                 if is_borg == "YES":
                     st.markdown('<div class="env-header env-test">TEST / DEV / BETA (isBorgTest=YES)</div>', unsafe_allow_html=True)
@@ -189,7 +189,7 @@ if raw_input and parse_btn:
                     for label, act, goal, r_type in rows:
                         status, bg = "👀 Review", "transparent"
                         is_empty = act is None or str(act).strip() == ""
-                        
+
                         if is_empty:
                             status, bg = "❌ MISSING", "rgba(255, 59, 48, 0.15)"
                         elif r_type == "binary":
@@ -214,7 +214,7 @@ if raw_input and parse_btn:
                     st.subheader("Job Details")
                     w_id, c_id = meta.get("wireId"), meta.get("class")
                     cqa = f' <span class="cqa-tag">[CQA]</span>' if (w_id == "778" and c_id == "1") else ""
-                    
+
                     def render_detail(label, actual, expected):
                         err = f" <span style='color:#ff3b30;'>❌ (Exp: {expected})</span>" if expected and str(actual) != str(expected) else ""
                         # Make source URLs clickable
@@ -223,11 +223,12 @@ if raw_input and parse_btn:
                         st.markdown(f"<div class='detail-item'><span class='detail-label'>{label}:</span><span class='detail-value'>{actual}</span>{err}</div>", unsafe_allow_html=True)
 
                     render_detail("Agent ID", job_props.get('agentId'), e_agent)
+                    render_detail("Job ID", data_all.get('key', {}).get('jobId'), None)
                     render_detail("Job Name", job_props.get('jobName'), e_jobname)
                     render_detail("Eco Ticker", job_meta.get('ecoticker'), e_ecoticker)
                     st.markdown(f"<div class='detail-item'><span class='detail-label'>Wire / Class:</span><span class='detail-value'>{w_id} / {c_id}</span>{cqa}</div>", unsafe_allow_html=True)
                     st.markdown(f"<div class='detail-item'><span class='detail-label'>Source URL:</span><div class='detail-value' style='font-size:0.85em;'>{content.get('sourceUrl')}</div></div>", unsafe_allow_html=True)
-                    
+
                     st.divider()
                     if st.button("♻️ Reset Form"): st.rerun()
 
