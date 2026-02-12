@@ -43,6 +43,16 @@ st.markdown("""
         border: 1px solid #3e3e3e;
         margin-bottom: 20px;
     }
+
+    /* Fix for expander chevron arrows */
+    [data-testid="st-expander"] .streamlit-expanderHeader:before {
+        content: "▶";  /* Right-pointing chevron */
+        font-size: 1rem;
+        margin-right: 5px;
+    }
+    [data-testid="st-expander"][aria-expanded="true"] .streamlit-expanderHeader:before {
+        content: "▼";  /* Down-pointing chevron */
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -59,7 +69,7 @@ st.markdown(f'<a href="{humio_url}" target="_blank" class="humio-link">🔗 Open
 
 # --- 1. TARGET INPUTS ---
 # Added unique keys to prevent UI glitches/overlap
-with st.expander("Target Values (Scenario-Specific Inputs)", expanded=False):
+with st.expander("🎯 Target Values (Scenario-Specific Inputs)", expanded=False):
     st.write("Enter values for this specific run. Blank fields will remain neutral.")
     c1, c2, c3 = st.columns([1.2, 1.2, 1.2])  # Adjusted column widths for better spacing
     t_ticker = c1.text_input("Target Ticker Value", key="input_t1")
