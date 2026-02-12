@@ -68,8 +68,8 @@ humio_url = "https://humio.prod.bloomberg.com/guts_wam/dashboards/hEIe82DuFR8EVa
 st.markdown(f'<a href="{humio_url}" target="_blank" class="humio-link">🔗 Open Humio Ledger Dashboard</a>', unsafe_allow_html=True)
 
 # --- 1. TARGET INPUTS ---
-# Use Streamlit's expander with a small note
-with st.expander("🎯 Target Values (Scenario-Specific Inputs) *collapsible*", expanded=False):
+# Use Streamlit's expander with "(Collapsible)" aligned to the right
+with st.expander("🎯 Target Values (Scenario-Specific Inputs)  " + " " * 50 + "(Collapsible)", expanded=False):
     st.write("Enter values for this specific run. Blank fields will remain neutral.")
     c1, c2, c3 = st.columns([1.2, 1.2, 1.2])  # Adjusted column widths for better spacing
     t_ticker = c1.text_input("Target Ticker Value", key="input_t1")
@@ -83,8 +83,28 @@ with st.expander("🎯 Target Values (Scenario-Specific Inputs) *collapsible*", 
     e_ecoticker = c6.text_input("Expected Eco Ticker", key="input_t6")
 
 # --- 2. INPUT AREA ---
+# Style the "Parse and Validate Log" button
+st.markdown("""
+    <style>
+    .green-button {
+        background-color: #28a745;
+        color: white;
+        font-size: 16px;
+        font-weight: bold;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        text-align: center;
+    }
+    .green-button:hover {
+        background-color: #218838;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 raw_input = st.text_area("Paste Raw Log Entry Here:", height=150)
-parse_btn = st.button("Parse and Validate Log")
+parse_btn = st.markdown('<button class="green-button">Parse and Validate Log</button>', unsafe_allow_html=True)
 
 has_targets = any([t_ticker, t_scaling, t_period])
 
