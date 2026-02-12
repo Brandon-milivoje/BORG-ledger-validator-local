@@ -149,15 +149,15 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-raw_input = st.text_area("Paste Raw Log Entry Here:", height=150)
-parse_btn = st.markdown('<button class="green-button">Parse and Validate Log</button>', unsafe_allow_html=True)
+raw_input = st.text_area("Paste Raw Log Entry Here:", height=150, key="raw_log_input")
+parse_btn = st.button("Parse and Validate Log", type="primary")
 
 # Add a horizontal line below the button
 st.divider()
 
 has_targets = any([t_ticker, t_scaling, t_period])
 
-if raw_input and parse_btn:
+if raw_input:
     try:
         json_match = re.search(r'(\{.*\})', raw_input)
         if json_match:
@@ -245,14 +245,22 @@ if raw_input and parse_btn:
                         st.markdown(f"<div class='detail-item'><span class='detail-label'>{label}:</span><span class='detail-value'>{actual}</span>{err}</div>", unsafe_allow_html=True)
 
                     render_detail("Agent ID", job_props.get('agentId'), e_agent)
-                    render_detail("Job ID", data_all.get('key', {}).get('jobId'), None)
+                    parsed_job_id = data_all.get('key', {}).get('jobId')
+                    render_detail("Job ID", parsed_job_id, None)
                     render_detail("Job Name", job_props.get('jobName'), e_jobname)
                     render_detail("Eco Ticker", job_meta.get('ecoticker'), e_ecoticker)
                     st.markdown(f"<div class='detail-item'><span class='detail-label'>Wire / Class:</span><span class='detail-value'>{w_id} / {c_id}</span>{cqa}</div>", unsafe_allow_html=True)
                     st.markdown(f"<div class='detail-item'><span class='detail-label'>Source URL:</span><div class='detail-value' style='font-size:0.85em;'>{content.get('sourceUrl')}</div></div>", unsafe_allow_html=True)
 
+                    # --- HUMIO LOG LINK ---
+                    if parsed_job_id:
+                        humio_job_url = f"https://humio.prod.bloomberg.com/guts_wam/dashboards/hEIe82DuFR8EVa7CJJdQn9UzuEejOJ2E?%24jobId=%5B%22{parsed_job_id}%22%5D&filterId=9e3WFUID6IX7ypte9Osrm3vm626FHi2y&fullscreen=false&sharedTime=true&start=15m&updateFrequency=never"
+                        st.markdown(f'<a href="{humio_job_url}" target="_blank" class="humio-link">🔗 Job ID - Humio Log</a>', unsafe_allow_html=True)
+
                     st.divider()
-                    if st.button("♻️ Reset Form"): st.rerun()
+                    def reset_form():
+                        st.session_state["raw_log_input"] = ""
+                    st.button("♻️ Reset Form", on_click=reset_form)
 
         else: st.error("No JSON block detected.")
     except Exception as e: st.error(f"Error: {e}")
