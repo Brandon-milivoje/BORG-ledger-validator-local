@@ -68,74 +68,19 @@ humio_url = "https://humio.prod.bloomberg.com/guts_wam/dashboards/hEIe82DuFR8EVa
 st.markdown(f'<a href="{humio_url}" target="_blank" class="humio-link">🔗 Open Humio Ledger Dashboard</a>', unsafe_allow_html=True)
 
 # --- 1. TARGET INPUTS ---
-# Added unique keys to prevent UI glitches/overlap
-st.markdown("""
-    <style>
-    /* Custom collapsible section */
-    .collapsible {
-        background-color: #2c2c2e;
-        color: white;
-        cursor: pointer;
-        padding: 10px;
-        width: 100%;
-        border: none;
-        text-align: left;
-        outline: none;
-        font-size: 1rem;
-        font-weight: 600;
-        border-radius: 4px;
-        margin-bottom: 10px;
-    }
-    .collapsible:hover {
-        background-color: #3e3e3e;
-    }
-    .collapsible:after {
-        content: "▶";
-        font-size: 1rem;
-        float: right;
-    }
-    .collapsible.active:after {
-        content: "▼";
-    }
-    .content {
-        padding: 0 15px;
-        display: none;
-        overflow: hidden;
-        background-color: #1e1e1f;
-        border-radius: 4px;
-        margin-top: 5px;
-    }
-    </style>
-    <script>
-    function toggleCollapsible(button) {
-        button.classList.toggle("active");
-        var content = button.nextElementSibling;
-        if (content.style.display === "block") {
-            content.style.display = "none";
-        } else {
-            content.style.display = "block";
-        }
-    }
-    </script>
-    """, unsafe_allow_html=True)
-
-st.markdown("""
-    <button class="collapsible" onclick="toggleCollapsible(this)">🎯 Target Values (Scenario-Specific Inputs)</button>
-    <div class="content">
-        <p>Enter values for this specific run. Blank fields will remain neutral.</p>
-        <div style="display: flex; gap: 10px;">
-            <div style="flex: 1;">Target Ticker Value: <input type="text" id="input_t1" style="width: 100%;"></div>
-            <div style="flex: 1;">Target Scaling Factor: <input type="text" id="input_t2" style="width: 100%;"></div>
-            <div style="flex: 1;">Target Observation Period: <input type="text" id="input_t3" style="width: 100%;"></div>
-        </div>
-        <hr>
-        <div style="display: flex; gap: 10px;">
-            <div style="flex: 1;">Expected Agent ID: <input type="text" id="input_t4" style="width: 100%;"></div>
-            <div style="flex: 1;">Expected Job Name: <input type="text" id="input_t5" style="width: 100%;"></div>
-            <div style="flex: 1;">Expected Eco Ticker: <input type="text" id="input_t6" style="width: 100%;"></div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+# Use Streamlit's expander for collapsible functionality
+with st.expander("🎯 Target Values (Scenario-Specific Inputs)", expanded=False):
+    st.write("Enter values for this specific run. Blank fields will remain neutral.")
+    c1, c2, c3 = st.columns([1.2, 1.2, 1.2])  # Adjusted column widths for better spacing
+    t_ticker = c1.text_input("Target Ticker Value", key="input_t1")
+    t_scaling = c2.text_input("Target Scaling Factor", key="input_t2")
+    t_period = c3.text_input("Target Observation Period", key="input_t3")
+    
+    st.divider()
+    c4, c5, c6 = st.columns([1.2, 1.2, 1.2])  # Adjusted column widths for better spacing
+    e_agent = c4.text_input("Expected Agent ID", key="input_t4")
+    e_jobname = c5.text_input("Expected Job Name", key="input_t5")
+    e_ecoticker = c6.text_input("Expected Eco Ticker", key="input_t6")
 
 # --- 2. INPUT AREA ---
 raw_input = st.text_area("Paste Raw Log Entry Here:", height=150)
