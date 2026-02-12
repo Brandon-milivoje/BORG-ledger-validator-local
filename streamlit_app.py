@@ -68,8 +68,8 @@ humio_url = "https://humio.prod.bloomberg.com/guts_wam/dashboards/hEIe82DuFR8EVa
 st.markdown(f'<a href="{humio_url}" target="_blank" class="humio-link">🔗 Open Humio Ledger Dashboard</a>', unsafe_allow_html=True)
 
 # --- 1. TARGET INPUTS ---
-# Use Streamlit's expander for collapsible functionality
-with st.expander("🎯 Target Values (Scenario-Specific Inputs)", expanded=False):
+# Use Streamlit's expander with a small note
+with st.expander("🎯 Target Values (Scenario-Specific Inputs) *collapsible*", expanded=False):
     st.write("Enter values for this specific run. Blank fields will remain neutral.")
     c1, c2, c3 = st.columns([1.2, 1.2, 1.2])  # Adjusted column widths for better spacing
     t_ticker = c1.text_input("Target Ticker Value", key="input_t1")
