@@ -61,13 +61,13 @@ st.markdown(f'<a href="{humio_url}" target="_blank" class="humio-link">🔗 Open
 # Added unique keys to prevent UI glitches/overlap
 with st.expander("🎯 Target Values (Scenario-Specific Inputs)", expanded=False):
     st.write("Enter values for this specific run. Blank fields will remain neutral.")
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3 = st.columns([1.2, 1.2, 1.2])  # Adjusted column widths for better spacing
     t_ticker = c1.text_input("Target Ticker Value", key="input_t1")
     t_scaling = c2.text_input("Target Scaling Factor", key="input_t2")
     t_period = c3.text_input("Target Observation Period", key="input_t3")
     
     st.divider()
-    c4, c5, c6 = st.columns(3)
+    c4, c5, c6 = st.columns([1.2, 1.2, 1.2])  # Adjusted column widths for better spacing
     e_agent = c4.text_input("Expected Agent ID", key="input_t4")
     e_jobname = c5.text_input("Expected Job Name", key="input_t5")
     e_ecoticker = c6.text_input("Expected Eco Ticker", key="input_t6")
