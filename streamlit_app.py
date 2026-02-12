@@ -57,7 +57,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- HEADER SECTION ---
-st.title("Bloomberg BORG Jobs Verification")
+st.title("Bloomberg BORG Jobs Verification By Brandon")
 st.markdown("""
 This tool automates the validation of JSON ledger logs from BORG jobs. It parses raw log strings to ensure environment flags, 
 ticker values, and routing parameters match expected benchmarks, reducing manual errors during economic data releases.
