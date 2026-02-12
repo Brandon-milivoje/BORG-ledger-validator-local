@@ -59,7 +59,7 @@ st.markdown(f'<a href="{humio_url}" target="_blank" class="humio-link">🔗 Open
 
 # --- 1. TARGET INPUTS ---
 # Added unique keys to prevent UI glitches/overlap
-with st.expander("🎯 Target Values (Scenario-Specific Inputs)", expanded=False):
+with st.expander("Target Values (Scenario-Specific Inputs)", expanded=False):
     st.write("Enter values for this specific run. Blank fields will remain neutral.")
     c1, c2, c3 = st.columns([1.2, 1.2, 1.2])  # Adjusted column widths for better spacing
     t_ticker = c1.text_input("Target Ticker Value", key="input_t1")
