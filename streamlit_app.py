@@ -27,7 +27,9 @@ st.markdown("""
     .detail-item { margin-bottom: 10px; font-size: 0.95em; line-height: 1.6; }
     .detail-label { color: #8e8e93; font-weight: 500; margin-right: 8px; }
     .detail-value { color: #ffffff; font-family: 'Roboto Mono', monospace; word-break: break-all; }
-    
+    .detail-value a { color: #0a84ff; text-decoration: none; } /* Make URLs clickable */
+    .detail-value a:hover { text-decoration: underline; }
+
     /* CQA Yellow Label */
     .cqa-tag { color: #ffcc00; font-weight: 600; margin-left: 5px; }
 
@@ -35,23 +37,44 @@ st.markdown("""
     .humio-link {
         display: inline-block;
         padding: 5px 12px;
-        background-color: #2c2c2e;
-        color: #0a84ff !important;
+        background-color: #ff9800; /* Orange tint */
+        color: white !important;
         border-radius: 4px;
         text-decoration: none;
         font-size: 0.85em;
-        border: 1px solid #3e3e3e;
+        border: 1px solid #e68900;
         margin-bottom: 20px;
+    }
+    .humio-link:hover {
+        background-color: #e68900;
     }
 
     /* Fix for expander chevron arrows */
     [data-testid="st-expander"] .streamlit-expanderHeader:before {
-        content: "▶";  /* Right-pointing chevron */
-        font-size: 1rem;
-        margin-right: 5px;
+        content: "";  /* Remove default arrows */
     }
-    [data-testid="st-expander"][aria-expanded="true"] .streamlit-expanderHeader:before {
-        content: "▼";  /* Down-pointing chevron */
+
+    /* Style for (Collapsible) */
+    .collapsible-note {
+        font-style: italic;
+        color: #8e8e93;
+        float: right;
+    }
+
+    /* Green Button */
+    .green-button {
+        background-color: #28a745;
+        color: white;
+        font-size: 16px;
+        font-weight: bold;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        text-align: center;
+    }
+    .green-button:hover {
+        background-color: #218838;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -68,8 +91,9 @@ humio_url = "https://humio.prod.bloomberg.com/guts_wam/dashboards/hEIe82DuFR8EVa
 st.markdown(f'<a href="{humio_url}" target="_blank" class="humio-link">🔗 Open Humio Ledger Dashboard</a>', unsafe_allow_html=True)
 
 # --- 1. TARGET INPUTS ---
-# Use Streamlit's expander with "(Collapsible)" aligned to the right
-with st.expander("🎯 Target Values (Scenario-Specific Inputs)  " + " " * 50 + "(Collapsible)", expanded=False):
+# Use Streamlit's expander with "(Collapsible)" styled
+with st.expander("🎯 Target Values (Scenario-Specific Inputs)"):
+    st.markdown('<span class="collapsible-note">(Collapsible)</span>', unsafe_allow_html=True)
     st.write("Enter values for this specific run. Blank fields will remain neutral.")
     c1, c2, c3 = st.columns([1.2, 1.2, 1.2])  # Adjusted column widths for better spacing
     t_ticker = c1.text_input("Target Ticker Value", key="input_t1")
@@ -105,6 +129,9 @@ st.markdown("""
 
 raw_input = st.text_area("Paste Raw Log Entry Here:", height=150)
 parse_btn = st.markdown('<button class="green-button">Parse and Validate Log</button>', unsafe_allow_html=True)
+
+# Add a horizontal line below the button
+st.divider()
 
 has_targets = any([t_ticker, t_scaling, t_period])
 
@@ -190,6 +217,9 @@ if raw_input and parse_btn:
                     
                     def render_detail(label, actual, expected):
                         err = f" <span style='color:#ff3b30;'>❌ (Exp: {expected})</span>" if expected and str(actual) != str(expected) else ""
+                        # Make source URLs clickable
+                        if label == "Source URL" and actual:
+                            actual = f'<a href="{actual}" target="_blank">{actual}</a>'
                         st.markdown(f"<div class='detail-item'><span class='detail-label'>{label}:</span><span class='detail-value'>{actual}</span>{err}</div>", unsafe_allow_html=True)
 
                     render_detail("Agent ID", job_props.get('agentId'), e_agent)
