@@ -1,7 +1,7 @@
 import streamlit as st
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # --- SET PAGE CONFIG ---
 st.set_page_config(page_title="BORG Jobs Verification", layout="wide")
@@ -207,9 +207,13 @@ if raw_input:
                     try:
                         pt = datetime.strptime(pub_time_str, "%Y-%m-%dT%H:%M:%S.%fZ")
                         formatted_pub = pt.strftime("%Y-%m-%d %H:%M:%S.") + f"{pt.microsecond // 1000:03d}"
+                        pt_est = pt.replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=-5)))
+                        formatted_est = pt_est.strftime("%Y-%m-%d %H:%M:%S.") + f"{pt_est.microsecond // 1000:03d}"
                     except Exception:
                         formatted_pub = pub_time_str
-                    st.markdown(f'<div class="pub-time-banner">Payload Timestamp: <strong>{formatted_pub} UTC</strong></div>', unsafe_allow_html=True)
+                        formatted_est = None
+                    est_part = f' <em style="color:#636366; font-size:0.85em;">({formatted_est} EST)</em>' if formatted_est else ''
+                    st.markdown(f'<div class="pub-time-banner">Payload Timestamp: <strong>{formatted_pub} UTC</strong>{est_part}</div>', unsafe_allow_html=True)
 
                 col1, col2 = st.columns([3, 2])
 
@@ -273,7 +277,11 @@ if raw_input:
                     render_detail("Job Name", job_props.get('jobName'), e_jobname)
                     render_detail("Eco Ticker", job_meta.get('ecoticker'), e_ecoticker)
                     st.markdown(f"<div class='detail-item'><span class='detail-label'>Wire / Class:</span><span class='detail-value'>{w_id} / {c_id}</span>{cqa}</div>", unsafe_allow_html=True)
-                    st.markdown(f"<div class='detail-item'><span class='detail-label'>Source URL:</span><div class='detail-value' style='font-size:0.85em;'>{content.get('sourceUrl')}</div></div>", unsafe_allow_html=True)
+                    source_url = content.get('sourceUrl')
+                    if source_url:
+                        st.markdown(f"<div class='detail-item'><span class='detail-label'>Source URL:</span><div class='detail-value' style='font-size:0.85em;'><a href='{source_url}' target='_blank'>{source_url}</a></div></div>", unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"<div class='detail-item'><span class='detail-label'>Source URL:</span><div class='detail-value' style='font-size:0.85em;'>None</div></div>", unsafe_allow_html=True)
 
                     # --- HUMIO LOG LINK ---
                     if parsed_job_id:
