@@ -49,9 +49,31 @@ st.markdown("""
         background-color: #e68900;
     }
 
-    /* Fix for expander chevron arrows */
-    [data-testid="st-expander"] .streamlit-expanderHeader:before {
-        content: "";  /* Remove default arrows */
+    /* Fix for expander chevron arrows - hide literal icon text */
+    [data-testid="stExpander"] details summary svg,
+    [data-testid="st-expander"] details summary svg {
+        display: inline-block !important;
+    }
+    [data-testid="stExpander"] summary span[data-testid="stMarkdownContainer"],
+    [data-testid="st-expander"] summary span[data-testid="stMarkdownContainer"] {
+        display: inline !important;
+    }
+    /* Hide raw Material Icon text fallback */
+    [data-testid="stExpander"] summary::before,
+    [data-testid="stExpander"] summary::after,
+    [data-testid="st-expander"] .streamlit-expanderHeader::before,
+    [data-testid="st-expander"] .streamlit-expanderHeader::after {
+        content: "" !important;
+        display: none !important;
+    }
+    details summary .material-icons,
+    details summary [class*="icon"] {
+        font-size: 0 !important;
+        overflow: hidden !important;
+    }
+    details summary .material-icons::before,
+    details summary [class*="icon"]::before {
+        font-size: 1rem !important;
     }
 
     /* Style for (Collapsible) */
