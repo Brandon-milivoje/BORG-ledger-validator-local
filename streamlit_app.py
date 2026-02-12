@@ -37,16 +37,48 @@ st.markdown("""
     .humio-link {
         display: inline-block;
         padding: 5px 12px;
-        background-color: #ff9800; /* Orange tint */
-        color: white !important;
+        background-color: #ff9800;
+        color: #1a1a1a !important;
+        font-weight: 600;
         border-radius: 4px;
-        text-decoration: none;
+        text-decoration: none !important;
         font-size: 0.85em;
         border: 1px solid #e68900;
         margin-bottom: 20px;
     }
     .humio-link:hover {
         background-color: #e68900;
+        text-decoration: none !important;
+    }
+
+    /* Vertical divider between columns */
+    [data-testid="stHorizontalBlock"] > div:first-child {
+        border-right: 2px solid #3a3a3c;
+        padding-right: 20px;
+    }
+
+    /* Publish timestamp banner */
+    .pub-time-banner {
+        background-color: #1c2333;
+        color: #8e8e93;
+        padding: 8px 14px;
+        border-radius: 4px;
+        font-size: 0.9em;
+        margin-bottom: 12px;
+        border-left: 4px solid #0a84ff;
+        font-family: 'Roboto Mono', monospace;
+    }
+    .pub-time-banner strong { color: #ffffff; }
+
+    /* Green parse button */
+    [data-testid="stButton"] button[kind="primary"] {
+        background-color: #28a745 !important;
+        border-color: #28a745 !important;
+        color: white !important;
+    }
+    [data-testid="stButton"] button[kind="primary"]:hover {
+        background-color: #218838 !important;
+        border-color: #218838 !important;
     }
 
     /* Fix for expander chevron arrows - hide literal icon text */
@@ -128,27 +160,6 @@ with st.expander("🎯 Target Values (Scenario-Specific Inputs)"):
     e_jobname = c5.text_input("Expected Job Name", key="input_t5")
     e_ecoticker = c6.text_input("Expected Eco Ticker", key="input_t6")
 
-# --- 2. INPUT AREA ---
-# Style the "Parse and Validate Log" button
-st.markdown("""
-    <style>
-    .green-button {
-        background-color: #28a745;
-        color: white;
-        font-size: 16px;
-        font-weight: bold;
-        padding: 10px 20px;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        text-align: center;
-    }
-    .green-button:hover {
-        background-color: #218838;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
 raw_input = st.text_area("Paste Raw Log Entry Here:", height=150, key="raw_log_input")
 parse_btn = st.button("Parse and Validate Log", type="primary")
 
@@ -172,7 +183,10 @@ if raw_input:
                 pub_time = datetime.strptime(pub_time_str, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
                 drift_seconds = (datetime.now(timezone.utc) - pub_time).total_seconds()
                 if drift_seconds > 900:  # 15 Minutes
-                    st.markdown(f'<div class="drift-warn">⚠️ STALE LOG DETECTED: This log was published {int(drift_seconds/60)} minutes ago.</div>', unsafe_allow_html=True)
+                    drift_hours = int(drift_seconds // 3600)
+                    drift_mins = int((drift_seconds % 3600) // 60)
+                    drift_display = f"{drift_hours}h {drift_mins}m" if drift_hours > 0 else f"{drift_mins}m"
+                    st.markdown(f'<div class="drift-warn">⚠️ STALE LOG DETECTED: This log was published {drift_display} ago.</div>', unsafe_allow_html=True)
 
             for i, obj in enumerate(obj_list):
                 meta = obj.get('objectMetadata', {})
@@ -187,6 +201,15 @@ if raw_input:
                 else:
                     msg = f"INVALID: isBorgTest is '{is_borg}'" if is_borg else "MISSING: isBorgTest is NULL"
                     st.markdown(f'<div class="env-header env-invalid">{msg}</div>', unsafe_allow_html=True)
+
+                # --- PUBLISH TIMESTAMP ---
+                if pub_time_str:
+                    try:
+                        pt = datetime.strptime(pub_time_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+                        formatted_pub = pt.strftime("%Y-%m-%d %H:%M:%S.") + f"{pt.microsecond // 1000:03d}"
+                    except Exception:
+                        formatted_pub = pub_time_str
+                    st.markdown(f'<div class="pub-time-banner">Payload Timestamp: <strong>{formatted_pub} UTC</strong></div>', unsafe_allow_html=True)
 
                 col1, col2 = st.columns([3, 2])
 
