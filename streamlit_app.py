@@ -1,7 +1,30 @@
 import streamlit as st
 import json
+import os
 import re
-from datetime import datetime, timezone, timedelta
+from html import escape as html_escape
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+# --- CONFIGURATION ---
+HUMIO_DASHBOARD_URL = os.environ.get(
+    "HUMIO_DASHBOARD_URL",
+    "https://humio.prod.bloomberg.com/guts_wam/dashboards/hEIe82DuFR8EVa7CJJdQn9UzuEejOJ2E"
+    "?updateFrequency=never&tz=America/New_York&sharedTime=true&start=15m&fullscreen=false"
+    "&$jobId=%5B%22*%22%5D"
+)
+HUMIO_JOB_URL_TEMPLATE = os.environ.get(
+    "HUMIO_JOB_URL_TEMPLATE",
+    "https://humio.prod.bloomberg.com/guts_wam/dashboards/hEIe82DuFR8EVa7CJJdQn9UzuEejOJ2E"
+    "?%24jobId=%5B%22{job_id}%22%5D"
+    "&filterId=9e3WFUID6IX7ypte9Osrm3vm626FHi2y&fullscreen=false"
+    "&sharedTime=true&start=15m&updateFrequency=never"
+)
+DRIFT_THRESHOLD_SECONDS = 900  # 15 minutes
+EASTERN_TZ = ZoneInfo("America/New_York")
+
+# --- INPUT FIELD SESSION KEYS ---
+INPUT_KEYS = ["raw_log_input", "input_t1", "input_t2", "input_t3", "input_t4", "input_t5", "input_t6"]
 
 # --- SET PAGE CONFIG ---
 st.set_page_config(page_title="BORG Jobs Verification", layout="wide")
@@ -27,7 +50,7 @@ st.markdown("""
     .detail-item { margin-bottom: 10px; font-size: 0.95em; line-height: 1.6; }
     .detail-label { color: #8e8e93; font-weight: 500; margin-right: 8px; }
     .detail-value { color: #ffffff; font-family: 'Roboto Mono', monospace; word-break: break-all; }
-    .detail-value a { color: #0a84ff; text-decoration: none; } /* Make URLs clickable */
+    .detail-value a { color: #0a84ff; text-decoration: none; }
     .detail-value a:hover { text-decoration: underline; }
 
     /* CQA Yellow Label */
@@ -133,6 +156,198 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+
+# --- HELPER FUNCTIONS ---
+
+def safe(val):
+    """HTML-escape a value for safe embedding in markup."""
+    if val is None:
+        return "None"
+    return html_escape(str(val))
+
+
+def parse_publish_time(pub_time_str):
+    """Parse the publish timestamp string into a timezone-aware datetime, or None on failure."""
+    if not pub_time_str:
+        return None
+    try:
+        return datetime.strptime(pub_time_str, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return None
+
+
+def format_timestamp(dt_utc):
+    """Return (utc_str, eastern_str, tz_label) formatted timestamp strings, or None on failure."""
+    if dt_utc is None:
+        return None, None, None
+    formatted_utc = dt_utc.strftime("%Y-%m-%d %H:%M:%S.") + f"{dt_utc.microsecond // 1000:03d}"
+    dt_eastern = dt_utc.astimezone(EASTERN_TZ)
+    formatted_eastern = dt_eastern.strftime("%Y-%m-%d %H:%M:%S.") + f"{dt_eastern.microsecond // 1000:03d}"
+    tz_label = dt_eastern.strftime("%Z")  # "EST" or "EDT" depending on DST
+    return formatted_utc, formatted_eastern, tz_label
+
+
+def extract_json(raw_input):
+    """Extract and parse the first JSON object from a raw log string."""
+    json_match = re.search(r'(\{.*\})', raw_input, re.DOTALL)
+    if not json_match:
+        return None
+    return json.loads(json_match.group(1))
+
+
+def check_drift(pub_dt):
+    """Return a human-readable drift string if the timestamp is stale, else None."""
+    if pub_dt is None:
+        return None
+    drift_seconds = (datetime.now(timezone.utc) - pub_dt).total_seconds()
+    if drift_seconds <= DRIFT_THRESHOLD_SECONDS:
+        return None
+    drift_hours = int(drift_seconds // 3600)
+    drift_mins = int((drift_seconds % 3600) // 60)
+    return f"{drift_hours}h {drift_mins}m" if drift_hours > 0 else f"{drift_mins}m"
+
+
+def is_safe_url(url):
+    """Basic check that a URL uses https."""
+    return url and str(url).startswith("https://")
+
+
+def render_detail(container, label, actual, expected=None):
+    """Render a single detail row in the Job Details column."""
+    escaped_actual = safe(actual)
+    err = ""
+    if expected and str(actual) != str(expected):
+        err = f" <span style='color:#ff3b30;'>&#10060; (Exp: {safe(expected)})</span>"
+
+    if label == "Source URL" and actual and is_safe_url(actual):
+        escaped_actual = f'<a href="{safe(actual)}" target="_blank">{safe(actual)}</a>'
+
+    container.markdown(
+        f"<div class='detail-item'><span class='detail-label'>{safe(label)}:</span>"
+        f"<span class='detail-value'>{escaped_actual}</span>{err}</div>",
+        unsafe_allow_html=True
+    )
+
+
+def render_verification_table(container, meta, is_borg, has_targets, targets):
+    """Render the verification table in the left column."""
+    t_ticker, t_scaling, t_period = targets
+
+    container.subheader("Verification")
+    h_cols = container.columns([1.5, 1, 1, 1] if has_targets else [1.5, 1, 1])
+    h_cols[0].markdown("**Field**")
+    h_cols[1].markdown("**Actual**")
+    if has_targets:
+        h_cols[2].markdown("**Target**")
+    h_cols[-1].markdown("**Status**")
+
+    rows = [
+        ("isBorgTest", is_borg, "YES/NO", "binary"),
+        ("sendToBorg", meta.get("sendToBorg"), "YES", "fixed"),
+        ("releaseDate", meta.get("releaseDate"), "NO RELEASE DATE", "fixed"),
+        ("scalingFactor", meta.get("scalingFactor"), t_scaling, "target"),
+        ("tickerValue", meta.get("tickerValue"), t_ticker, "target"),
+        ("observationPeriod", meta.get("observationPeriod"), t_period, "target"),
+    ]
+
+    for label, act, goal, r_type in rows:
+        status, bg = "&#128064; Review", "transparent"
+        is_empty = act is None or str(act).strip() == ""
+
+        if is_empty:
+            status, bg = "&#10060; MISSING", "rgba(255, 59, 48, 0.15)"
+        elif r_type == "binary":
+            if act == "YES":
+                status, bg = "&#129514; TEST", "rgba(255, 204, 0, 0.15)"
+            elif act == "NO":
+                status, bg = "&#128640; PROD", "rgba(76, 217, 100, 0.15)"
+            else:
+                status, bg = f"&#10060; INVALID (Exp: {safe(goal)})", "rgba(255, 59, 48, 0.15)"
+        elif r_type == "fixed":
+            if act == goal:
+                status, bg = "&#9989; OK", "rgba(76, 217, 100, 0.1)"
+            else:
+                status, bg = f"&#10060; MISMATCH (Exp: {safe(goal)})", "rgba(255, 59, 48, 0.15)"
+        elif r_type == "target" and goal:
+            if str(act) == str(goal):
+                status, bg = "&#9989; MATCH", "rgba(76, 217, 100, 0.1)"
+            else:
+                status, bg = f"&#10060; MISMATCH (Exp: {safe(goal)})", "rgba(255, 59, 48, 0.15)"
+
+        row_cols = container.columns([1.5, 1, 1, 1] if has_targets else [1.5, 1, 1])
+        row_cols[0].markdown(
+            f'<div style="background:{bg}; padding:5px; font-weight:600;">{safe(label)}</div>',
+            unsafe_allow_html=True
+        )
+        row_cols[1].markdown(
+            f'<div style="background:{bg}; padding:5px; font-family:monospace;">{safe(act)}</div>',
+            unsafe_allow_html=True
+        )
+        if has_targets:
+            target_display = safe(goal) if r_type == "target" and goal else "-"
+            row_cols[2].markdown(
+                f'<div style="background:{bg}; padding:5px; color:#8e8e93;">{target_display}</div>',
+                unsafe_allow_html=True
+            )
+        row_cols[-1].markdown(
+            f'<div style="background:{bg}; padding:5px; font-weight:600; text-align:right;">{status}</div>',
+            unsafe_allow_html=True
+        )
+
+
+def render_job_details(container, meta, content, job_props, job_meta, data_all, expectations):
+    """Render the job details panel in the right column."""
+    e_agent, e_jobname, e_ecoticker = expectations
+
+    container.subheader("Job Details")
+    w_id, c_id = meta.get("wireId"), meta.get("class")
+    cqa = ' <span class="cqa-tag">[CQA]</span>' if (w_id == "778" and c_id == "1") else ""
+
+    render_detail(container, "Agent ID", job_props.get('agentId'), e_agent)
+    parsed_job_id = data_all.get('key', {}).get('jobId')
+    render_detail(container, "Job ID", parsed_job_id)
+    render_detail(container, "Job Name", job_props.get('jobName'), e_jobname)
+    render_detail(container, "Eco Ticker", job_meta.get('ecoticker'), e_ecoticker)
+    container.markdown(
+        f"<div class='detail-item'><span class='detail-label'>Wire / Class:</span>"
+        f"<span class='detail-value'>{safe(w_id)} / {safe(c_id)}</span>{cqa}</div>",
+        unsafe_allow_html=True
+    )
+
+    source_url = content.get('sourceUrl')
+    if source_url and is_safe_url(source_url):
+        container.markdown(
+            f"<div class='detail-item'><span class='detail-label'>Source URL:</span>"
+            f"<div class='detail-value' style='font-size:0.85em;'>"
+            f"<a href='{safe(source_url)}' target='_blank'>{safe(source_url)}</a></div></div>",
+            unsafe_allow_html=True
+        )
+    else:
+        display = safe(source_url) if source_url else "None"
+        container.markdown(
+            f"<div class='detail-item'><span class='detail-label'>Source URL:</span>"
+            f"<div class='detail-value' style='font-size:0.85em;'>{display}</div></div>",
+            unsafe_allow_html=True
+        )
+
+    # Humio log link for this job
+    if parsed_job_id:
+        humio_job_url = HUMIO_JOB_URL_TEMPLATE.format(job_id=safe(parsed_job_id))
+        container.markdown(
+            f'<a href="{humio_job_url}" target="_blank" class="humio-link">'
+            f'&#128279; Job ID - Humio Log</a>',
+            unsafe_allow_html=True
+        )
+
+    container.divider()
+
+
+def reset_form():
+    """Clear all input fields."""
+    for key in INPUT_KEYS:
+        st.session_state[key] = ""
+
+
 # --- HEADER SECTION ---
 st.title("Bloomberg BORG Jobs Verification")
 st.markdown("""
@@ -141,21 +356,23 @@ ticker values, and routing parameters match expected benchmarks, reducing manual
 """)
 
 # --- HELPFUL LINKS ---
-humio_url = "https://humio.prod.bloomberg.com/guts_wam/dashboards/hEIe82DuFR8EVa7CJJdQn9UzuEejOJ2E?updateFrequency=never&tz=America/New_York&sharedTime=true&start=15m&fullscreen=false&$jobId=%5B%22*%22%5D"
-st.markdown(f'<a href="{humio_url}" target="_blank" class="humio-link">🔗 Open Humio Ledger Dashboard</a>', unsafe_allow_html=True)
+st.markdown(
+    f'<a href="{HUMIO_DASHBOARD_URL}" target="_blank" class="humio-link">'
+    f'&#128279; Open Humio Ledger Dashboard</a>',
+    unsafe_allow_html=True
+)
 
-# --- 1. TARGET INPUTS ---
-# Use Streamlit's expander with "(Collapsible)" styled
-with st.expander("🎯 Target Values (Scenario-Specific Inputs)"):
+# --- TARGET INPUTS ---
+with st.expander("&#127919; Target Values (Scenario-Specific Inputs)"):
     st.markdown('<span class="collapsible-note">(Collapsible)</span>', unsafe_allow_html=True)
     st.write("Enter values for this specific run. Blank fields will remain neutral.")
-    c1, c2, c3 = st.columns([1.2, 1.2, 1.2])  # Adjusted column widths for better spacing
+    c1, c2, c3 = st.columns(3)
     t_ticker = c1.text_input("Target Ticker Value", key="input_t1")
     t_scaling = c2.text_input("Target Scaling Factor", key="input_t2")
     t_period = c3.text_input("Target Observation Period", key="input_t3")
 
     st.divider()
-    c4, c5, c6 = st.columns([1.2, 1.2, 1.2])  # Adjusted column widths for better spacing
+    c4, c5, c6 = st.columns(3)
     e_agent = c4.text_input("Expected Agent ID", key="input_t4")
     e_jobname = c5.text_input("Expected Job Name", key="input_t5")
     e_ecoticker = c6.text_input("Expected Eco Ticker", key="input_t6")
@@ -163,135 +380,99 @@ with st.expander("🎯 Target Values (Scenario-Specific Inputs)"):
 raw_input = st.text_area("Paste Raw Log Entry Here:", height=150, key="raw_log_input")
 parse_btn = st.button("Parse and Validate Log", type="primary")
 
-# Add a horizontal line below the button
 st.divider()
 
-has_targets = any([t_ticker, t_scaling, t_period])
+has_targets = any((t_ticker, t_scaling, t_period))
 
-if raw_input:
+# --- MAIN VALIDATION (only runs when button is clicked) ---
+if parse_btn and raw_input:
     try:
-        json_match = re.search(r'(\{.*\})', raw_input)
-        if json_match:
-            data_all = json.loads(json_match.group(1))
+        data_all = extract_json(raw_input)
+        if data_all is None:
+            st.error("No JSON block detected in the pasted input.")
+        else:
             obj_list = data_all.get('data', {}).get('objects', [])
             job_props = data_all.get('data', {}).get('jobProperties', {})
             job_meta = data_all.get('data', {}).get('jobMetadata', {})
             pub_time_str = data_all.get('metadata', {}).get('bbds.context.publishTime')
 
-            # --- DRIFT ALERT LOGIC (Set to 15 mins) ---
-            if pub_time_str:
-                pub_time = datetime.strptime(pub_time_str, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
-                drift_seconds = (datetime.now(timezone.utc) - pub_time).total_seconds()
-                if drift_seconds > 900:  # 15 Minutes
-                    drift_hours = int(drift_seconds // 3600)
-                    drift_mins = int((drift_seconds % 3600) // 60)
-                    drift_display = f"{drift_hours}h {drift_mins}m" if drift_hours > 0 else f"{drift_mins}m"
-                    st.markdown(f'<div class="drift-warn">⚠️ STALE LOG DETECTED: This log was published {drift_display} ago.</div>', unsafe_allow_html=True)
+            # Parse timestamp once and reuse
+            pub_dt = parse_publish_time(pub_time_str)
+
+            # Drift alert
+            drift_display = check_drift(pub_dt)
+            if drift_display:
+                st.markdown(
+                    f'<div class="drift-warn">&#9888;&#65039; STALE LOG DETECTED: '
+                    f'This log was published {drift_display} ago.</div>',
+                    unsafe_allow_html=True
+                )
 
             for i, obj in enumerate(obj_list):
                 meta = obj.get('objectMetadata', {})
                 content = obj.get('objectContent', [{}])[0].get('contentMetadata', {})
                 is_borg = meta.get('isBorgTest')
 
-                # --- ENVIRONMENT HEADER ---
+                # Environment header
                 if is_borg == "YES":
-                    st.markdown('<div class="env-header env-test">TEST / DEV / BETA (isBorgTest=YES)</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        '<div class="env-header env-test">TEST / DEV / BETA (isBorgTest=YES)</div>',
+                        unsafe_allow_html=True
+                    )
                 elif is_borg == "NO":
-                    st.markdown('<div class="env-header env-prod">PRODUCTION ⚠️ (Ready for Results - isBorgTest=NO)</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        '<div class="env-header env-prod">PRODUCTION &#9888;&#65039; '
+                        '(Ready for Results - isBorgTest=NO)</div>',
+                        unsafe_allow_html=True
+                    )
                 else:
-                    msg = f"INVALID: isBorgTest is '{is_borg}'" if is_borg else "MISSING: isBorgTest is NULL"
-                    st.markdown(f'<div class="env-header env-invalid">{msg}</div>', unsafe_allow_html=True)
+                    if is_borg:
+                        msg = f"INVALID: isBorgTest is '{safe(is_borg)}'"
+                    else:
+                        msg = "MISSING: isBorgTest is NULL"
+                    st.markdown(
+                        f'<div class="env-header env-invalid">{msg}</div>',
+                        unsafe_allow_html=True
+                    )
 
-                # --- PUBLISH TIMESTAMP ---
-                if pub_time_str:
-                    try:
-                        pt = datetime.strptime(pub_time_str, "%Y-%m-%dT%H:%M:%S.%fZ")
-                        formatted_pub = pt.strftime("%Y-%m-%d %H:%M:%S.") + f"{pt.microsecond // 1000:03d}"
-                        pt_est = pt.replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=-5)))
-                        formatted_est = pt_est.strftime("%Y-%m-%d %H:%M:%S.") + f"{pt_est.microsecond // 1000:03d}"
-                    except Exception:
-                        formatted_pub = pub_time_str
-                        formatted_est = None
-                    est_part = f' <em style="color:#636366; font-size:0.85em;">({formatted_est} EST)</em>' if formatted_est else ''
-                    st.markdown(f'<div class="pub-time-banner">Payload Timestamp: <strong>{formatted_pub} UTC</strong>{est_part}</div>', unsafe_allow_html=True)
+                # Publish timestamp banner
+                if pub_dt:
+                    formatted_utc, formatted_eastern, tz_label = format_timestamp(pub_dt)
+                    eastern_part = ""
+                    if formatted_eastern:
+                        eastern_part = (
+                            f' <em style="color:#636366; font-size:0.85em;">'
+                            f'({formatted_eastern} {tz_label})</em>'
+                        )
+                    st.markdown(
+                        f'<div class="pub-time-banner">Payload Timestamp: '
+                        f'<strong>{formatted_utc} UTC</strong>{eastern_part}</div>',
+                        unsafe_allow_html=True
+                    )
+                elif pub_time_str:
+                    st.markdown(
+                        f'<div class="pub-time-banner">Payload Timestamp: '
+                        f'<strong>{safe(pub_time_str)}</strong> (unparseable)</div>',
+                        unsafe_allow_html=True
+                    )
 
                 col1, col2 = st.columns([3, 2])
 
                 with col1:
-                    st.subheader("Verification")
-                    h_cols = st.columns([1.5, 1, 1, 1] if has_targets else [1.5, 1, 1])
-                    h_cols[0].markdown("**Field**")
-                    h_cols[1].markdown("**Actual**")
-                    if has_targets: h_cols[2].markdown("**Target**")
-                    h_cols[-1].markdown("**Status**")
-
-                    # Organized Table: isBorgTest, sendToBorg, releaseDate, scalingFactor, tickerValue, observationPeriod
-                    rows = [
-                        ("isBorgTest", is_borg, "YES/NO", "binary"),
-                        ("sendToBorg", meta.get("sendToBorg"), "YES", "fixed"),
-                        ("releaseDate", meta.get("releaseDate"), "NO RELEASE DATE", "fixed"),
-                        ("scalingFactor", meta.get("scalingFactor"), t_scaling, "target"),
-                        ("tickerValue", meta.get("tickerValue"), t_ticker, "target"),
-                        ("observationPeriod", meta.get("observationPeriod"), t_period, "target")
-                    ]
-
-                    for label, act, goal, r_type in rows:
-                        status, bg = "👀 Review", "transparent"
-                        is_empty = act is None or str(act).strip() == ""
-
-                        if is_empty:
-                            status, bg = "❌ MISSING", "rgba(255, 59, 48, 0.15)"
-                        elif r_type == "binary":
-                            if act == "YES": status, bg = "🧪 TEST", "rgba(255, 204, 0, 0.15)"
-                            elif act == "NO": status, bg = "🚀 PROD", "rgba(76, 217, 100, 0.15)"
-                            else: status, bg = f"❌ INVALID (Exp: {goal})", "rgba(255, 59, 48, 0.15)"
-                        elif r_type == "fixed":
-                            if act == goal: status, bg = "✅ OK", "rgba(76, 217, 100, 0.1)"
-                            else: status, bg = f"❌ MISMATCH (Exp: {goal})", "rgba(255, 59, 48, 0.15)"
-                        elif r_type == "target" and goal:
-                            if str(act) == str(goal): status, bg = "✅ MATCH", "rgba(76, 217, 100, 0.1)"
-                            else: status, bg = f"❌ MISMATCH (Exp: {goal})", "rgba(255, 59, 48, 0.15)"
-
-                        row_cols = st.columns([1.5, 1, 1, 1] if has_targets else [1.5, 1, 1])
-                        row_cols[0].markdown(f'<div style="background:{bg}; padding:5px; font-weight:600;">{label}</div>', unsafe_allow_html=True)
-                        row_cols[1].markdown(f'<div style="background:{bg}; padding:5px; font-family:monospace;">{act}</div>', unsafe_allow_html=True)
-                        if has_targets:
-                            row_cols[2].markdown(f'<div style="background:{bg}; padding:5px; color:#8e8e93;">{goal if r_type=="target" and goal else "-"}</div>', unsafe_allow_html=True)
-                        row_cols[-1].markdown(f'<div style="background:{bg}; padding:5px; font-weight:600; text-align:right;">{status}</div>', unsafe_allow_html=True)
+                    render_verification_table(
+                        col1, meta, is_borg, has_targets,
+                        (t_ticker, t_scaling, t_period)
+                    )
 
                 with col2:
-                    st.subheader("Job Details")
-                    w_id, c_id = meta.get("wireId"), meta.get("class")
-                    cqa = f' <span class="cqa-tag">[CQA]</span>' if (w_id == "778" and c_id == "1") else ""
+                    render_job_details(
+                        col2, meta, content, job_props, job_meta, data_all,
+                        (e_agent, e_jobname, e_ecoticker)
+                    )
+                    st.button("&#9851;&#65039; Reset Form", on_click=reset_form, key=f"reset_{i}")
 
-                    def render_detail(label, actual, expected):
-                        err = f" <span style='color:#ff3b30;'>❌ (Exp: {expected})</span>" if expected and str(actual) != str(expected) else ""
-                        # Make source URLs clickable
-                        if label == "Source URL" and actual:
-                            actual = f'<a href="{actual}" target="_blank">{actual}</a>'
-                        st.markdown(f"<div class='detail-item'><span class='detail-label'>{label}:</span><span class='detail-value'>{actual}</span>{err}</div>", unsafe_allow_html=True)
-
-                    render_detail("Agent ID", job_props.get('agentId'), e_agent)
-                    parsed_job_id = data_all.get('key', {}).get('jobId')
-                    render_detail("Job ID", parsed_job_id, None)
-                    render_detail("Job Name", job_props.get('jobName'), e_jobname)
-                    render_detail("Eco Ticker", job_meta.get('ecoticker'), e_ecoticker)
-                    st.markdown(f"<div class='detail-item'><span class='detail-label'>Wire / Class:</span><span class='detail-value'>{w_id} / {c_id}</span>{cqa}</div>", unsafe_allow_html=True)
-                    source_url = content.get('sourceUrl')
-                    if source_url:
-                        st.markdown(f"<div class='detail-item'><span class='detail-label'>Source URL:</span><div class='detail-value' style='font-size:0.85em;'><a href='{source_url}' target='_blank'>{source_url}</a></div></div>", unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"<div class='detail-item'><span class='detail-label'>Source URL:</span><div class='detail-value' style='font-size:0.85em;'>None</div></div>", unsafe_allow_html=True)
-
-                    # --- HUMIO LOG LINK ---
-                    if parsed_job_id:
-                        humio_job_url = f"https://humio.prod.bloomberg.com/guts_wam/dashboards/hEIe82DuFR8EVa7CJJdQn9UzuEejOJ2E?%24jobId=%5B%22{parsed_job_id}%22%5D&filterId=9e3WFUID6IX7ypte9Osrm3vm626FHi2y&fullscreen=false&sharedTime=true&start=15m&updateFrequency=never"
-                        st.markdown(f'<a href="{humio_job_url}" target="_blank" class="humio-link">🔗 Job ID - Humio Log</a>', unsafe_allow_html=True)
-
-                    st.divider()
-                    def reset_form():
-                        st.session_state["raw_log_input"] = ""
-                    st.button("♻️ Reset Form", on_click=reset_form)
-
-        else: st.error("No JSON block detected.")
-    except Exception as e: st.error(f"Error: {e}")
+    except json.JSONDecodeError as e:
+        st.error(f"Invalid JSON: {e}")
+    except Exception as e:
+        st.error(f"Error ({type(e).__name__}): {e}")
+        st.exception(e)
