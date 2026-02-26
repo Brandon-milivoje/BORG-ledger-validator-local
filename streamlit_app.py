@@ -108,7 +108,40 @@ st.markdown("""
         border-color: #218838 !important;
     }
 
-    /* Fix for expander chevron arrows - hide literal icon text */
+    /* Hide ALL Material Symbols/Icons text fallback globally */
+    .material-symbols-rounded,
+    .material-symbols-outlined,
+    .material-symbols-sharp,
+    .material-icons,
+    [class*="material-symbols"],
+    [class*="material-icons"],
+    [data-testid="stSidebarCollapseButton"] span,
+    [data-testid="collapsedControl"] span,
+    [data-testid="stExpander"] summary span[data-testid="stIconMaterial"],
+    [data-testid="st-expander"] summary span[data-testid="stIconMaterial"] {
+        font-size: 0 !important;
+        line-height: 0 !important;
+        overflow: hidden !important;
+        display: inline-block !important;
+        width: 1.2em !important;
+        height: 1.2em !important;
+    }
+
+    /* Sidebar toggle button - hide literal text like "keyboard_double_arrow_right" */
+    [data-testid="stSidebarCollapseButton"] button,
+    [data-testid="collapsedControl"] button {
+        font-size: 0 !important;
+        overflow: hidden !important;
+    }
+    [data-testid="stSidebarCollapseButton"] button svg,
+    [data-testid="collapsedControl"] button svg {
+        font-size: 1rem !important;
+        width: 1.2em !important;
+        height: 1.2em !important;
+        display: inline-block !important;
+    }
+
+    /* Expander chevron arrows - hide literal text like "expand_more" */
     [data-testid="stExpander"] details summary svg,
     [data-testid="st-expander"] details summary svg {
         display: inline-block !important;
@@ -117,7 +150,6 @@ st.markdown("""
     [data-testid="st-expander"] summary span[data-testid="stMarkdownContainer"] {
         display: inline !important;
     }
-    /* Hide raw Material Icon text fallback */
     [data-testid="stExpander"] summary::before,
     [data-testid="stExpander"] summary::after,
     [data-testid="st-expander"] .streamlit-expanderHeader::before,
@@ -126,13 +158,10 @@ st.markdown("""
         display: none !important;
     }
     details summary .material-icons,
-    details summary [class*="icon"] {
+    details summary [class*="icon"],
+    details summary [class*="material-symbols"] {
         font-size: 0 !important;
         overflow: hidden !important;
-    }
-    details summary .material-icons::before,
-    details summary [class*="icon"]::before {
-        font-size: 1rem !important;
     }
 
     /* Style for (Collapsible) */
